@@ -4,8 +4,8 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/server.js",
-    "worker:start": "node dist/worker.js",
+    "start": "node dist/src/server.js",
+    "worker:start": "node dist/src/worker.js",
     "dev": "tsx watch src/server.ts",
     "worker": "tsx watch src/worker.ts",
     "test": "vitest",
