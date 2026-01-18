@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "worker": "tsx watch src/worker.ts",
-    "test": "vitest run"
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "type": "module",
   "keywords": [],
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@types/node": "^25.0.9",
     "@types/pg": "^8.16.0",
+    "@types/supertest": "^6.0.3",
     "@types/ws": "^8.18.1",
     "supertest": "^7.2.2",
     "tsx": "^4.21.0",
