@@ -1,4 +1,26 @@
 # **Order Execution Engine (Backend Task)**
+## Design Decisions
+
+- **Order type: MARKET only**
+  - Only MARKET orders are supported to keep the flow simple and focused: validate → enqueue → route → execute → stream updates.
+- **Mock DEX execution**
+  - A mock DEX router (with simulated latency, 2–5% quote variance, and configurable failure rate via `MOCK_FAIL_RATE`) is used to focus on architecture, reliability, and observability, not integration complexity.
+- **Separation of concerns: API vs Worker**
+  - The API server only validates, persists, and enqueues jobs.
+  - A separate BullMQ worker handles routing and execution (supports concurrency and rate limiting), following production-ready async patterns.
+- **Durable state & event sourcing**
+  - Postgres stores all order snapshots and append-only event logs for replay/post-mortem, ensuring traceability of every status transition.
+- **Real-time updates: WebSocket + Redis pub/sub**
+  - `/api/orders/execute`:
+    - POST creates an order.
+    - GET (WebSocket) streams updates.
+  - WebSocket replays event history from Postgres, then streams live updates via Redis pub/sub, so clients always get the full lifecycle even after reconnecting.
+- **Routing logic & transparency**
+  - Routes orders by fetching Raydium and Meteora quotes and selecting the best venue by net output (`netOut = amountIn * price * (1 - fee)`).
+  - Routing decisions are sent to both WebSocket clients (as payloads) and worker logs for transparency.
+- **Reliability: retries & failure handling**
+  - BullMQ implements exponential backoff and up to 3 attempts per order.
+  - Retries emit intermediate status updates; persistent failures are marked final, storing error details for auditability.
 
 A minimal order execution engine that:
 - **Accepts `MARKET` orders via HTTP**
@@ -33,6 +55,15 @@ echo "ORDER_ID=$ORDER_ID"
 
 WS_BASE=$(echo "$BASE" | sed 's/^https:/wss:/; s/^http:/ws:/')
 npx wscat -c "$WS_BASE/api/orders/execute?orderId=$ORDER_ID"
+
+# Create 5 orders in parallel
+BASE="https://orderexecutionengine-production-78e3.up.railway.app"
+
+seq 1 5 | xargs -n1 -P5 -I{} sh -c \
+'curl -s -X POST "'"$BASE"'/api/orders/execute" \
+  -H "content-type: application/json" \
+  -d '"'"'{"type":"MARKET","tokenIn":"SOL","tokenOut":"USDC","amountIn":1,"slippageBps":50}'"'"'; echo'
+
 ```
 **Query order snapshot + full event history:**
 ```sh
